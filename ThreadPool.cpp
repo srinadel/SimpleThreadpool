@@ -12,7 +12,7 @@ ThreadPool::ThreadPool(): running(true), taskSize(0u), jobSize(0u){
 }
 
 ThreadPool::~ThreadPool(){
-    std::unique_lock<std::mutex> lock(mutex_t);
+    std::unique_lock<std::mutex> lock(mutex_t);        //Need to unlock explicity 
     running = false;
     worker_cv.notify_all();
     lock.unlock();
@@ -21,15 +21,15 @@ ThreadPool::~ThreadPool(){
     }
 }
 
-int ThreadPool::task_create(){
-    std::lock_guard<std::mutex> lock(mutex_t);
+int ThreadPool::createTask(){
+    /* https://stackoverflow.com/questions/20516773/stdunique-lockstdmutex-or-stdlock-guardstdmutex */
+    std::lock_guard<std::mutex> lock(mutex_t);          //unlock happens implicitly on block completion.
     int task;
     if (freeTasks.empty()){
-        task = static_cast<int>(taskSize);
+        task = taskSize;
         taskSize++;
         pendingTasksCount.resize(taskSize);
-    }
-    else{
+    }else{
         task = freeTasks.back();
         freeTasks.pop_back();
     }
@@ -37,12 +37,12 @@ int ThreadPool::task_create(){
     return task;
 }
 
-bool ThreadPool::task_finished(int task) const{
+bool ThreadPool::postTask(int task) const{
     std::lock_guard<std::mutex> lock(mutex_t);
     return pendingTasksCount[task] == 0u;
 }
 
-void ThreadPool::task_perform(int task, const Job& job){
+void ThreadPool::performTask(int task, const Job& job){
     std::lock_guard<std::mutex> lock(mutex_t);
     jobTasks.push_back(task);
     jobFunctions.push_back(job);
@@ -51,7 +51,7 @@ void ThreadPool::task_perform(int task, const Job& job){
     worker_cv.notify_one();
 }
 
-void ThreadPool::task_wait(int task){
+void ThreadPool::taskWait(int task){
     std::unique_lock<std::mutex> lock(mutex_t);
 
     while (pendingTasksCount[task] > 0)
